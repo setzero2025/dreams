@@ -71,6 +71,10 @@ dist/
 web-build/
 *.orig.*
 
+# Large binary files
+*.apk
+*.ipa
+
 # Env files
 .env
 .env.local
