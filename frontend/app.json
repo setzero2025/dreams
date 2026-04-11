@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "记梦App",
+    "slug": "dreams-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0f"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0f"
+      },
+      "package": "com.setzero110.dreamsapp"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
