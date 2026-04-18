@@ -73,7 +73,8 @@ export async function submitT2VTask(prompt: string): Promise<{ taskId: string }>
 // 等待视频生成完成
 export async function waitForT2VTask(taskId: string): Promise<{ status: string; videoUrl?: string; coverUrl?: string; errorMessage?: string }> {
   const videoUrl = await pollVideoTask(taskId);
-  const coverUrl = videoUrl ? `${videoUrl}?x-oss-process=video/snapshot,t_1000,f_jpg,w_720,h_405,m_fast` : undefined;
+  // 使用视频第一帧作为封面（t_0表示第0毫秒，即视频开头帧）
+  const coverUrl = videoUrl ? `${videoUrl}?x-oss-process=video/snapshot,t_0,f_jpg,w_720,h_405,m_fast` : undefined;
   return {
     status: 'SUCCEEDED',
     videoUrl,
@@ -83,11 +84,13 @@ export async function waitForT2VTask(taskId: string): Promise<{ status: string; 
 
 // 内部实现：提交视频生成任务
 async function submitVideoTask(prompt: string): Promise<string> {
-  if (!process.env.WAN26T2V_API_KEY) {
-    throw new Error('请配置 WAN26T2V_API_KEY 环境变量');
+  // 优先使用 WAN26T2V_API_KEY，如果不存在则使用 DASHSCOPE_API_KEY
+  const apiKey = process.env.WAN26T2V_API_KEY || process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) {
+    throw new Error('请配置 WAN26T2V_API_KEY 或 DASHSCOPE_API_KEY 环境变量');
   }
 
-  console.log('[WAN26T2V] 提交视频生成任务，API Key:', process.env.WAN26T2V_API_KEY.substring(0, 10) + '...');
+  console.log('[WAN26T2V] 提交视频生成任务，API Key:', apiKey.substring(0, 10) + '...');
   console.log('[WAN26T2V] 提示词:', prompt.substring(0, 50));
 
   try {
@@ -107,7 +110,7 @@ async function submitVideoTask(prompt: string): Promise<string> {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.WAN26T2V_API_KEY}`,
+          'Authorization': `Bearer ${apiKey}`,
           'X-DashScope-Async': 'enable',
         },
         timeout: 30000,
@@ -134,36 +137,53 @@ async function submitVideoTask(prompt: string): Promise<string> {
 
 // 轮询视频生成状态
 async function pollVideoTask(taskId: string): Promise<string> {
-  if (!process.env.WAN26T2V_API_KEY) {
-    throw new Error('请配置 WAN26T2V_API_KEY 环境变量');
+  // 优先使用 WAN26T2V_API_KEY，如果不存在则使用 DASHSCOPE_API_KEY
+  const apiKey = process.env.WAN26T2V_API_KEY || process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) {
+    throw new Error('请配置 WAN26T2V_API_KEY 或 DASHSCOPE_API_KEY 环境变量');
   }
 
-  const maxAttempts = 60;
-  const interval = 5000;
+  // 增加轮询次数和间隔：最大180次，每次10秒，总共30分钟
+  const maxAttempts = 180;
+  const interval = 10000;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise(resolve => setTimeout(resolve, interval));
 
-    const response = await axios.get(
-      `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.WAN26T2V_API_KEY}`,
-        },
-        timeout: 10000,
+    try {
+      const response = await axios.get(
+        `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          timeout: 10000,
+        }
+      );
+
+      const status = response.data.output?.task_status;
+      const message = response.data.output?.message || '';
+
+      console.log(`[WAN26T2V] 轮询任务状态: ${taskId}, 状态: ${status}, 尝试: ${attempt + 1}/${maxAttempts}`);
+
+      if (status === 'SUCCEEDED') {
+        return response.data.output?.video_url;
+      } else if (status === 'FAILED') {
+        console.error(`[WAN26T2V] 任务失败: ${taskId}, 错误: ${message}`);
+        throw new Error(message || '视频生成失败');
       }
-    );
-
-    const status = response.data.output?.task_status;
-
-    if (status === 'SUCCEEDED') {
-      return response.data.output?.video_url;
-    } else if (status === 'FAILED') {
-      throw new Error(response.data.output?.message || '视频生成失败');
+      // 其他状态（PENDING/RUNNING）继续轮询
+    } catch (error: any) {
+      // 如果是任务失败的错误，直接抛出
+      if (error.message && (error.message.includes('视频生成失败') || error.message.includes('FAILED'))) {
+        throw error;
+      }
+      // 网络错误继续轮询
+      console.warn(`[WAN26T2V] 轮询请求失败，继续尝试: ${error.message}`);
     }
   }
 
-  throw new Error('视频生成超时');
+  throw new Error('视频生成超时，请稍后通过创作中心查看结果');
 }
 
 export async function generateVideo(options: VideoGenerationOptions): Promise<VideoGenerationResult> {
@@ -184,8 +204,8 @@ export async function generateVideo(options: VideoGenerationOptions): Promise<Vi
     const videoUrl = await pollVideoTask(taskId);
     console.log('【视频生成完成】:', videoUrl.substring(0, 50));
 
-    // 4. 生成封面图 URL（使用阿里云 OSS 视频截图功能）
-    const coverUrl = videoUrl ? `${videoUrl}?x-oss-process=video/snapshot,t_1000,f_jpg,w_720,h_405,m_fast` : undefined;
+    // 4. 生成封面图 URL（使用阿里云 OSS 视频截图功能，t_0表示第0毫秒，即视频开头帧）
+    const coverUrl = videoUrl ? `${videoUrl}?x-oss-process=video/snapshot,t_0,f_jpg,w_720,h_405,m_fast` : undefined;
 
     return {
       taskId,

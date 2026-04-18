@@ -230,11 +230,10 @@ export const TABLES = {
   // 用户相关
   USER_PROFILES: 'user_profiles',
   AUTH_USERS: 'auth_users',
-  USER_SETTINGS: 'user_settings',
   VOICE_PROFILES: 'voice_profiles',
 
   // 梦境相关
-  DREAMS: 'dreams',
+  DREAMS: 'dream_entries',
   DREAM_TAGS: 'dream_tags',
   DREAM_IMAGES: 'dream_images',
 
@@ -244,9 +243,6 @@ export const TABLES = {
   
   // 梦境解读
   INTERPRETATIONS: 'interpretations',
-  SYMBOL_INTERPRETATIONS: 'symbol_interpretations',
-  EMOTION_ANALYSES: 'emotion_analyses',
-  INTERPRETATION_SUGGESTIONS: 'interpretation_suggestions',
   
   // 知识库
   KNOWLEDGE_BASE: 'knowledge_base',

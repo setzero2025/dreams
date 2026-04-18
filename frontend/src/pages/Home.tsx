@@ -244,10 +244,6 @@ export const Home: React.FC<HomeProps> = ({ navigation, route }) => {
     filterDreams(dreams, activeTab, searchQuery);
   }, [searchQuery, activeTab, dreams, filterDreams]);
 
-  const handleRecord = (type: 'voice' | 'text') => {
-    navigation.navigate('Record', { type });
-  };
-
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     filterDreams(dreams, tab, searchQuery);
@@ -429,45 +425,6 @@ export const Home: React.FC<HomeProps> = ({ navigation, route }) => {
     activeTabText: {
       color: '#fff',
       fontWeight: '600',
-    },
-    quickActions: {
-      flexDirection: 'row',
-      gap: 16,
-      marginBottom: 24,
-    },
-    quickButtonWrapper: {
-      flex: 1,
-      position: 'relative',
-    },
-    quickButtonGlow: {
-      ...StyleSheet.absoluteFillObject,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      opacity: 0.3,
-      zIndex: -1,
-    },
-    quickButtonContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      paddingVertical: 16,
-      paddingHorizontal: 20,
-      gap: 8,
-    },
-    quickButtonSecondaryContent: {
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    quickButtonIcon: {
-      fontSize: 20,
-    },
-    quickButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#fff',
     },
     streakBadge: {
       flexDirection: 'row',
@@ -670,44 +627,6 @@ export const Home: React.FC<HomeProps> = ({ navigation, route }) => {
             <Text style={[dynamicStyles.tabText, activeTab === 'all' && dynamicStyles.activeTabText]}>
               全部
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={dynamicStyles.quickActions}>
-          <TouchableOpacity 
-            style={dynamicStyles.quickButtonWrapper}
-            onPress={() => handleRecord('voice')}
-            activeOpacity={0.9}
-          >
-            <Animated.View
-              style={[
-                dynamicStyles.quickButtonGlow,
-                {
-                  transform: [
-                    {
-                      scale: floatingAnimation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1, 1.05],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-            <View style={dynamicStyles.quickButtonContent}>
-              <Text style={dynamicStyles.quickButtonIcon}>🎤</Text>
-              <Text style={dynamicStyles.quickButtonText}>语音记梦</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={dynamicStyles.quickButtonWrapper}
-            onPress={() => handleRecord('text')}
-            activeOpacity={0.9}
-          >
-            <View style={[dynamicStyles.quickButtonContent, dynamicStyles.quickButtonSecondaryContent]}>
-              <Text style={dynamicStyles.quickButtonIcon}>✏️</Text>
-              <Text style={[dynamicStyles.quickButtonText, { color: colors.text }]}>文字记梦</Text>
-            </View>
           </TouchableOpacity>
         </View>
 

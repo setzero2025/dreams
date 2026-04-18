@@ -9,8 +9,8 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
-import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { BackButton } from '../components/BackButton';
 import { useTheme } from '../theme/themeContext';
@@ -33,6 +33,11 @@ export const Register: React.FC<RegisterProps> = ({ navigation }) => {
   }>({});
   const [loading, setLoading] = useState(false);
   const [checkingPhone, setCheckingPhone] = useState(false);
+
+  // 输入框聚焦状态
+  const [phoneFocused, setPhoneFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
   // 验证手机号格式
   const validatePhoneFormat = (phone: string): boolean => {
@@ -58,6 +63,7 @@ export const Register: React.FC<RegisterProps> = ({ navigation }) => {
 
   // 手机号输入框失焦处理
   const handlePhoneBlur = () => {
+    setPhoneFocused(false);
     if (phone.trim() && validatePhoneFormat(phone)) {
       checkPhoneExists(phone);
     }
@@ -154,6 +160,12 @@ export const Register: React.FC<RegisterProps> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* 背景装饰 */}
+      <View style={styles.backgroundDecorations}>
+        <View style={[styles.circle1, isDark && styles.circle1Dark]} />
+        <View style={[styles.circle2, isDark && styles.circle2Dark]} />
+      </View>
+
       {/* 顶部导航 */}
       <View style={styles.navHeader}>
         <BackButton onPress={() => navigation.goBack()} />
@@ -162,6 +174,7 @@ export const Register: React.FC<RegisterProps> = ({ navigation }) => {
         </View>
         <View style={styles.navPlaceholder} />
       </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -172,60 +185,123 @@ export const Register: React.FC<RegisterProps> = ({ navigation }) => {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.logo}>✨</Text>
+            <View style={[styles.logoContainer, isDark && styles.logoContainerDark]}>
+              <Text style={styles.logo}>✨</Text>
+            </View>
             <Text style={styles.title}>创建账号</Text>
             <Text style={styles.subtitle}>开始你的梦境之旅</Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
+            {/* 手机号输入框 */}
             <View style={styles.inputContainer}>
-              <Input
-                label="手机号"
-                placeholder="请输入11位手机号"
-                value={phone}
-                onChangeText={handlePhoneChange}
-                onBlur={handlePhoneBlur}
-                keyboardType="phone-pad"
-                maxLength={11}
-                error={errors.phone}
-                editable={!loading}
-              />
-              {checkingPhone && (
-                <ActivityIndicator
-                  size="small"
-                  color={colors.primary}
-                  style={styles.checkingIndicator}
+              <Text style={styles.inputLabel}>手机号</Text>
+              <View style={[
+                styles.inputWrapper,
+                phoneFocused && styles.inputWrapperFocused,
+                errors.phone && styles.inputWrapperError,
+                isDark ? styles.inputWrapperDark : styles.inputWrapperLight
+              ]}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    isDark ? styles.inputDark : styles.inputLight
+                  ]}
+                  placeholder="请输入11位手机号"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                  value={phone}
+                  onChangeText={handlePhoneChange}
+                  onFocus={() => setPhoneFocused(true)}
+                  onBlur={handlePhoneBlur}
+                  keyboardType="phone-pad"
+                  maxLength={11}
+                  editable={!loading}
                 />
+                {checkingPhone && (
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.primary}
+                    style={styles.checkingIndicator}
+                  />
+                )}
+              </View>
+              {errors.phone && (
+                <Text style={styles.errorText}>{errors.phone}</Text>
               )}
             </View>
 
-            <Input
-              label="密码"
-              placeholder="请输入密码（至少8位，包含字母和数字）"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              error={errors.password}
-              editable={!loading}
-            />
+            {/* 密码输入框 */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>密码</Text>
+              <View style={[
+                styles.inputWrapper,
+                passwordFocused && styles.inputWrapperFocused,
+                errors.password && styles.inputWrapperError,
+                isDark ? styles.inputWrapperDark : styles.inputWrapperLight
+              ]}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    isDark ? styles.inputDark : styles.inputLight
+                  ]}
+                  placeholder="请输入密码（至少8位，包含字母和数字）"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  secureTextEntry
+                  editable={!loading}
+                />
+              </View>
+              {errors.password && (
+                <Text style={styles.errorText}>{errors.password}</Text>
+              )}
+            </View>
 
-            <Input
-              label="确认密码"
-              placeholder="请再次输入密码"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              error={errors.confirmPassword}
-              editable={!loading}
-            />
+            {/* 确认密码输入框 */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>确认密码</Text>
+              <View style={[
+                styles.inputWrapper,
+                confirmPasswordFocused && styles.inputWrapperFocused,
+                errors.confirmPassword && styles.inputWrapperError,
+                isDark ? styles.inputWrapperDark : styles.inputWrapperLight
+              ]}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    isDark ? styles.inputDark : styles.inputLight
+                  ]}
+                  placeholder="请再次输入密码"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  onFocus={() => setConfirmPasswordFocused(true)}
+                  onBlur={() => setConfirmPasswordFocused(false)}
+                  secureTextEntry
+                  editable={!loading}
+                />
+              </View>
+              {errors.confirmPassword && (
+                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+              )}
+            </View>
 
-            <Button
-              title={loading ? '注册中...' : '注册'}
+            <TouchableOpacity
+              style={[
+                styles.registerButton,
+                loading && styles.registerButtonDisabled
+              ]}
               onPress={handleRegister}
               disabled={loading || checkingPhone}
-              style={styles.registerButton}
-            />
+              activeOpacity={0.8}
+            >
+              <Text style={styles.registerButtonText}>
+                {loading ? '注册中...' : '注册'}
+              </Text>
+            </TouchableOpacity>
 
             {loading && (
               <ActivityIndicator
@@ -254,6 +330,41 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  // 背景装饰
+  backgroundDecorations: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+  },
+  circle1: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    top: -100,
+    right: -100,
+  },
+  circle1Dark: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  circle2: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+    bottom: 100,
+    left: -50,
+  },
+  circle2Dark: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+  },
+  // 导航栏
   navHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -283,41 +394,137 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
+  // Header
   header: {
     alignItems: 'center',
     marginBottom: 48,
   },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logoContainerDark: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    shadowOpacity: 0.3,
+  },
   logo: {
-    fontSize: 64,
-    marginBottom: 16,
+    fontSize: 40,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 8,
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.textSecondary,
+    letterSpacing: 0.3,
   },
+  // Form
   form: {
     width: '100%',
   },
   inputContainer: {
-    position: 'relative',
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  inputWrapper: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputWrapperLight: {
+    backgroundColor: '#ffffff',
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  inputWrapperDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  inputWrapperFocused: {
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  inputWrapperError: {
+    borderColor: colors.error,
+  },
+  input: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    minHeight: 52,
+  },
+  inputLight: {
+    color: '#1a1a2e',
+  },
+  inputDark: {
+    color: '#ffffff',
   },
   checkingIndicator: {
-    position: 'absolute',
-    right: 12,
-    top: 40,
+    marginRight: 12,
+  },
+  errorText: {
+    fontSize: 12,
+    color: colors.error,
+    marginTop: 6,
+    marginLeft: 4,
   },
   registerButton: {
-    marginTop: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+    marginTop: 8,
+  },
+  registerButtonDisabled: {
+    opacity: 0.6,
+  },
+  registerButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   loader: {
     marginTop: 16,
   },
+  // Footer
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',

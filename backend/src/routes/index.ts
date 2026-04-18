@@ -9,6 +9,7 @@ import dreamRoutes from './dreamRoutes';
 import generationRoutes from './generationRoutes';
 import aiRoutes from './aiRoutes';
 import creationRoutes from './creationRoutes';
+import audioRoutes from './audioRoutes';
 
 const router = Router();
 
@@ -29,6 +30,9 @@ router.use(`${API_PREFIX}/ai`, aiRoutes);
 
 // 创作相关路由
 router.use(`${API_PREFIX}/creations`, creationRoutes);
+
+// 音频相关路由（录音上传、语音转文字）
+router.use(`${API_PREFIX}/audio`, audioRoutes);
 
 // 健康检查
 router.get('/health', (req, res) => {

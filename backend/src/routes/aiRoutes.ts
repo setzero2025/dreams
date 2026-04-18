@@ -86,20 +86,24 @@ router.post('/generate-video', authenticate, asyncHandler(async (req: Request, r
       );
       console.log('[AI Routes] 视频已上传到 Storage:', storageUrl);
 
-      // 同时上传封面图
+      // 生成封面图并上传
+      // 使用视频第一帧作为封面（t_0表示第0毫秒，即第一帧）
       let coverStorageUrl = result.coverUrl;
-      if (result.coverUrl) {
-        try {
-          coverStorageUrl = await supabaseStorageService.uploadFromUrl(
-            supabaseStorageService.getBucketConfig().AI_IMAGE,
-            result.coverUrl,
-            userId,
-            dreamId
-          );
-          console.log('[AI Routes] 封面已上传到 Storage:', coverStorageUrl);
-        } catch (coverError) {
-          console.error('[AI Routes] 封面上传失败，使用原始URL:', coverError);
-        }
+      const videoCoverUrl = `${result.videoUrl}?x-oss-process=video/snapshot,t_0,f_jpg,w_720,h_405,m_fast`;
+      
+      try {
+        console.log('[AI Routes] 开始下载并上传封面图:', videoCoverUrl);
+        coverStorageUrl = await supabaseStorageService.uploadFromUrl(
+          supabaseStorageService.getBucketConfig().AI_IMAGE,
+          videoCoverUrl,
+          userId,
+          dreamId
+        );
+        console.log('[AI Routes] 封面已上传到 Storage:', coverStorageUrl);
+      } catch (coverError) {
+        console.error('[AI Routes] 封面上传失败，使用OSS截图URL:', coverError);
+        // 上传失败时，使用OSS截图URL作为备选
+        coverStorageUrl = videoCoverUrl;
       }
 
       taskProgressService.updateProgress(task.taskId, 95, '上传完成，正在保存...');
@@ -112,9 +116,13 @@ router.post('/generate-video', authenticate, asyncHandler(async (req: Request, r
       });
     } catch (storageError) {
       console.error('[AI Routes] 上传到 Storage 失败，使用原始URL:', storageError);
-      // 上传失败时仍然返回原始URL
+      // 上传失败时仍然返回原始URL，但确保有封面URL
+      const fallbackCoverUrl = result.coverUrl || `${result.videoUrl}?x-oss-process=video/snapshot,t_0,f_jpg,w_720,h_405,m_fast`;
       taskProgressService.updateProgress(task.taskId, 95, '上传失败，使用原始链接...');
-      taskProgressService.completeTask(task.taskId, result);
+      taskProgressService.completeTask(task.taskId, {
+        ...result,
+        coverUrl: fallbackCoverUrl,
+      });
     }
   }).catch(error => {
     taskProgressService.failTask(task.taskId, error.message);

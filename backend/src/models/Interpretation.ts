@@ -3,7 +3,6 @@ import { User } from './User';
 import { Dream } from './Dream';
 import { SymbolInterpretation } from './SymbolInterpretation';
 import { EmotionAnalysis } from './EmotionAnalysis';
-import { InterpretationSuggestion } from './InterpretationSuggestion';
 
 @Entity('interpretations')
 export class Interpretation {
@@ -36,7 +35,4 @@ export class Interpretation {
 
   @OneToMany(() => EmotionAnalysis, emotion => emotion.interpretation, { cascade: true })
   emotions: EmotionAnalysis[];
-
-  @OneToMany(() => InterpretationSuggestion, suggestion => suggestion.interpretation, { cascade: true })
-  suggestions: InterpretationSuggestion[];
 }

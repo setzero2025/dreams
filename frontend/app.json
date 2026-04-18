@@ -5,21 +5,30 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "icon": "./assets/icon-512.png",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#0a0a0f"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "icon": "./assets/icon-1024.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0a0a0f"
+        "foregroundImage": "./assets/icon-foreground.png",
+        "backgroundImage": "./assets/icon-background.png"
       },
+      "icon": "./assets/icon-512.png",
       "package": "com.setzero110.dreamsapp"
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5ef61779-ef09-413b-a096-e5e0ef654ed5"
+      }
+    }
   }
 }

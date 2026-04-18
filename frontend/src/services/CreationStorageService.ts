@@ -3,7 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface CreationItem {
   id: string;
-  type: 'image' | 'script' | 'video' | 'video_long';
+  // 创作类型：图片、剧本、视频、长视频、梦境解读
+  type: 'image' | 'script' | 'video' | 'video_long' | 'interpretation';
   title: string;
   dreamTitle: string;
   dreamId: string;
@@ -25,43 +26,46 @@ export interface CreationItem {
       mood: string;
     }>;
   };
+  // 梦境解读相关字段
+  interpretation?: string;
+  symbols?: Array<{ symbol: string; meaning: string; context: string }>;
+  emotions?: { primary: string; intensity: number; description: string } | Array<{ primary: string; intensity: number; description: string }>;
+  suggestions?: string[];
   status?: string;
   style?: string;
   createdAt: string;
   boundScriptId?: string;
   boundVideoId?: string;
+  // 用户ID，用于本地数据隔离
+  userId?: string;
 }
 
-const CREATIONS_KEY = '@creations';
+// 存储键名
+const CREATIONS_KEY_PREFIX = '@creations';
+const ANONYMOUS_CREATIONS_KEY = '@creations_anonymous';
 // Token 存储键名 - 必须与 authApi.ts 中保持一致
 const AUTH_KEY = 'access_token';
+const USER_KEY = 'user_info';
 
 // 判断是否为本地梦境（未登录用户创建的梦境）
 // 本地梦境ID格式：dream_时间戳 或 local_前缀
-// 注意：即使是UUID格式，如果梦境是本地创建的（未同步到云端），也视为本地梦境
+// 云端梦境ID格式：标准UUID格式
 function isLocalDream(dreamId: string): boolean {
   // 如果是dream_或local_开头，肯定是本地梦境
   if (dreamId.startsWith('dream_') || dreamId.startsWith('local_')) {
     return true;
   }
   
-  // 对于其他格式（包括UUID），需要检查是否真的是云端梦境
-  // 这里我们假设：如果ID不是标准UUID格式，就是本地梦境
   // 标准UUID格式：8-4-4-4-12 的十六进制字符串
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   
-  // 如果不是标准UUID格式，认为是本地梦境
-  if (!uuidRegex.test(dreamId)) {
-    return true;
+  // 如果是标准UUID格式，认为是云端梦境
+  // 这样可以确保云端梦境的作品能正确保存到后端
+  if (uuidRegex.test(dreamId)) {
+    return false;
   }
   
-  // 即使是UUID格式，我们也保守地认为是本地梦境
-  // 因为无法确定这个UUID是否真的存在于后端数据库
-  // 只有当明确知道是云端梦境时，才返回false
-  // 这里我们可以通过其他方式判断，比如检查梦境对象是否有userId等字段
-  
-  // 暂时保守处理：所有梦境都视为本地梦境，只保存到本地
-  // 这样可以避免外键约束错误
+  // 其他格式视为本地梦境
   return true;
 }
 
@@ -76,12 +80,36 @@ async function getAuthToken(): Promise<string | null> {
   }
 }
 
+// 辅助函数：获取当前用户ID
+async function getCurrentUserId(): Promise<string | null> {
+  try {
+    const userInfo = await AsyncStorage.getItem(USER_KEY);
+    if (userInfo) {
+      const user = JSON.parse(userInfo);
+      return user.id || null;
+    }
+    return null;
+  } catch (error) {
+    console.warn('获取用户ID失败:', error);
+    return null;
+  }
+}
+
+// 辅助函数：判断是否已登录
+async function isLoggedIn(): Promise<boolean> {
+  const token = await getAuthToken();
+  return !!token;
+}
+
 // 基础请求函数
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const token = await getAuthToken();
+  const url = `${API_BASE_URL}${endpoint}`;
+
+  console.log('【CreationStorageService】API请求:', url, 'Token存在:', !!token);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -92,24 +120,44 @@ async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: '请求失败' }));
-    throw new Error(error.message || `HTTP ${response.status}`);
+    console.log('【CreationStorageService】API响应状态:', response.status, response.statusText);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('【CreationStorageService】API请求失败:', response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('【CreationStorageService】API响应数据:', JSON.stringify(data, null, 2));
+    return data;
+  } catch (error) {
+    console.error('【CreationStorageService】API请求异常:', error);
+    throw error;
   }
-
-  return response.json();
 }
 
-// 本地存储操作
+// 本地存储操作 - 支持用户隔离
 const localStorage = {
+  // 获取存储键名（根据用户ID隔离）
+  async getStorageKey(): Promise<string> {
+    const userId = await getCurrentUserId();
+    if (userId) {
+      return `${CREATIONS_KEY_PREFIX}_${userId}`;
+    }
+    return ANONYMOUS_CREATIONS_KEY;
+  },
+
   async getAll(): Promise<CreationItem[]> {
     try {
-      const data = await AsyncStorage.getItem(CREATIONS_KEY);
+      const key = await this.getStorageKey();
+      const data = await AsyncStorage.getItem(key);
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error('读取本地创作失败:', error);
@@ -119,14 +167,19 @@ const localStorage = {
 
   async save(creation: CreationItem): Promise<void> {
     try {
+      // 添加用户ID到创作数据
+      const userId = await getCurrentUserId();
+      const creationWithUser = { ...creation, userId: userId || 'anonymous' };
+
+      const key = await this.getStorageKey();
       const creations = await this.getAll();
       const index = creations.findIndex(c => c.id === creation.id);
       if (index >= 0) {
-        creations[index] = creation;
+        creations[index] = creationWithUser;
       } else {
-        creations.push(creation);
+        creations.push(creationWithUser);
       }
-      await AsyncStorage.setItem(CREATIONS_KEY, JSON.stringify(creations));
+      await AsyncStorage.setItem(key, JSON.stringify(creations));
     } catch (error) {
       console.error('保存本地创作失败:', error);
       throw error;
@@ -135,9 +188,10 @@ const localStorage = {
 
   async delete(id: string): Promise<void> {
     try {
+      const key = await this.getStorageKey();
       const creations = await this.getAll();
       const filtered = creations.filter(c => c.id !== id);
-      await AsyncStorage.setItem(CREATIONS_KEY, JSON.stringify(filtered));
+      await AsyncStorage.setItem(key, JSON.stringify(filtered));
     } catch (error) {
       console.error('删除本地创作失败:', error);
       throw error;
@@ -166,10 +220,35 @@ const localStorage = {
 
   async clearAll(): Promise<void> {
     try {
-      await AsyncStorage.removeItem(CREATIONS_KEY);
+      const key = await this.getStorageKey();
+      await AsyncStorage.removeItem(key);
     } catch (error) {
       console.error('清空本地创作失败:', error);
       throw error;
+    }
+  },
+
+  // 清理匿名用户数据（登录后调用）
+  async migrateAnonymousData(userId: string): Promise<CreationItem[]> {
+    try {
+      const anonymousData = await AsyncStorage.getItem(ANONYMOUS_CREATIONS_KEY);
+      if (!anonymousData) return [];
+
+      const creations: CreationItem[] = JSON.parse(anonymousData);
+      const userKey = `${CREATIONS_KEY_PREFIX}_${userId}`;
+      
+      // 将匿名数据迁移到用户名下
+      const creationsWithUser = creations.map(c => ({ ...c, userId }));
+      await AsyncStorage.setItem(userKey, JSON.stringify(creationsWithUser));
+      
+      // 清空匿名数据
+      await AsyncStorage.removeItem(ANONYMOUS_CREATIONS_KEY);
+      
+      console.log('【CreationStorage】匿名数据已迁移到用户:', userId, '数量:', creations.length);
+      return creationsWithUser;
+    } catch (error) {
+      console.error('迁移匿名数据失败:', error);
+      return [];
     }
   },
 };
@@ -178,9 +257,17 @@ class CreationStorageService {
   // 获取所有创作
   async getAllCreations(): Promise<CreationItem[]> {
     try {
+      const loggedIn = await isLoggedIn();
+      
+      // 未登录时返回空数组（不显示任何创作）
+      if (!loggedIn) {
+        console.log('【CreationStorage】未登录，返回空创作列表');
+        return [];
+      }
+      
       const token = await getAuthToken();
       
-      // 从本地获取数据
+      // 从本地获取数据（已按用户隔离）
       const localCreations = await localStorage.getAll();
       console.log('【CreationStorage】本地创作数量:', localCreations.length);
       
@@ -212,8 +299,8 @@ class CreationStorageService {
       return localCreations;
     } catch (error) {
       console.error('获取创作列表失败:', error);
-      // 出错时回退到本地存储
-      return await localStorage.getAll();
+      // 出错时返回空数组（更安全）
+      return [];
     }
   }
 
@@ -222,29 +309,43 @@ class CreationStorageService {
     try {
       // 如果是本地梦境，保存到本地
       if (isLocalDream(creation.dreamId)) {
+        console.log('【CreationStorage】本地梦境，保存到本地:', creation.dreamId);
         await localStorage.save(creation);
         return;
       }
 
       const token = await getAuthToken();
       
-      // 如果有 token，保存到云端
+      // 如果有 token，尝试保存到云端
       if (token) {
-        await apiRequest<{
-          success: boolean;
-          message?: string;
-          data: any;
-        }>(API_ENDPOINTS.CREATIONS.CREATE, {
-          method: 'POST',
-          body: JSON.stringify(creation),
-        });
+        try {
+          await apiRequest<{
+            success: boolean;
+            message?: string;
+            data: any;
+          }>(API_ENDPOINTS.CREATIONS.CREATE, {
+            method: 'POST',
+            body: JSON.stringify(creation),
+          });
+          console.log('【CreationStorage】云端保存成功:', creation.id);
+        } catch (apiError: any) {
+          // 如果后端返回梦境不存在，降级保存到本地
+          if (apiError.message?.includes('梦境不存在') || apiError.message?.includes('Dream not found')) {
+            console.warn('【CreationStorage】梦境不存在于云端，降级保存到本地:', creation.dreamId);
+            await localStorage.save(creation);
+          } else {
+            // 其他错误，继续抛出
+            throw apiError;
+          }
+        }
       } else {
-        // 否则保存到本地
+        // 没有 token，保存到本地（匿名用户）
+        console.log('【CreationStorage】未登录，保存到本地:', creation.dreamId);
         await localStorage.save(creation);
       }
     } catch (error) {
-      console.error('保存创作失败:', error);
-      // 出错时保存到本地
+      console.error('保存创作失败，降级保存到本地:', error);
+      // 出错时降级保存到本地
       await localStorage.save(creation);
     }
   }
@@ -280,31 +381,45 @@ class CreationStorageService {
 
   // 根据梦境ID获取创作
   async getCreationsByDreamId(dreamId: string): Promise<CreationItem[]> {
+    console.log('【CreationStorageService】获取梦境创作, dreamId:', dreamId, '是否本地:', isLocalDream(dreamId));
+    
     // 如果是本地梦境，直接从本地获取
     if (isLocalDream(dreamId)) {
+      console.log('【CreationStorageService】本地梦境，从本地存储获取');
       return await localStorage.getByDreamId(dreamId);
     }
 
     try {
       const token = await getAuthToken();
+      console.log('【CreationStorageService】Token存在:', !!token);
       
       // 如果有 token，从云端获取
       if (token) {
+        const endpoint = API_ENDPOINTS.CREATIONS.BY_DREAM(dreamId);
+        console.log('【CreationStorageService】请求云端API:', endpoint);
+        
         const response = await apiRequest<{
           success: boolean;
           data: CreationItem[];
           message?: string;
-        }>(API_ENDPOINTS.CREATIONS.BY_DREAM(dreamId));
+        }>(endpoint);
+
+        console.log('【CreationStorageService】云端API返回:', JSON.stringify(response, null, 2));
 
         if (response.success) {
-          return response.data;
+          console.log('【CreationStorageService】返回数据数量:', response.data?.length || 0);
+          return response.data || [];
+        } else {
+          console.warn('【CreationStorageService】API返回失败:', response.message);
         }
+      } else {
+        console.log('【CreationStorageService】无Token，跳过云端请求');
       }
       
       // 否则从本地获取
       return await localStorage.getByDreamId(dreamId);
     } catch (error) {
-      console.error('获取梦境创作失败:', error);
+      console.error('【CreationStorageService】获取梦境创作失败:', error);
       // 出错时回退到本地存储
       return await localStorage.getByDreamId(dreamId);
     }
@@ -358,6 +473,16 @@ class CreationStorageService {
       console.error('清空创作失败:', error);
       throw error;
     }
+  }
+
+  // 迁移匿名数据（登录后调用）
+  async migrateAnonymousData(userId: string): Promise<CreationItem[]> {
+    return await localStorage.migrateAnonymousData(userId);
+  }
+
+  // 获取登录状态
+  async checkLoginStatus(): Promise<boolean> {
+    return await isLoggedIn();
   }
 }
 

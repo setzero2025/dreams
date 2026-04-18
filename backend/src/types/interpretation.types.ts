@@ -17,10 +17,10 @@ export interface InterpretationEntity {
   content: string;
   symbols: SymbolInterpretation[];
   emotions_analysis: EmotionsAnalysis | null;
-  suggestions: string[];
-  reference_ids: string[];
+  suggestions: string | null;
+  reference_ids: string | null;
   model_source: string | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, any> | null;
   created_at: string;
 }
 
@@ -52,7 +52,7 @@ export interface CreateInterpretationDTO {
   symbols?: SymbolInterpretation[];
   emotionsAnalysis?: EmotionsAnalysis;
   suggestions?: string[];
-  referenceIds?: string[];
+  references?: KnowledgeReference[];
   modelSource?: string;
 }
 

@@ -15,14 +15,21 @@ import { errorHandler } from './middleware/error-handler';
 
 const app = express();
 
+// 禁用 ETag，避免 304 缓存问题
+app.set('etag', false);
+
 // ==================== 安全中间件 ====================
 
-// Helmet 安全头
-app.use(helmet());
+// Helmet 安全头（禁用缓存相关头）
+app.use(helmet({
+  noSniff: true,
+  xssFilter: true,
+  hidePoweredBy: true,
+}));
 
-// CORS 配置
+// CORS 配置 - 允许所有来源
 app.use(cors({
-  origin: config.server.env === 'development' ? '*' : config.cors.allowedOrigins,
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Device-ID'],
@@ -36,6 +43,15 @@ app.use(morgan('combined', {
     write: (message: string) => logger.info(message.trim()),
   },
 }));
+
+// ==================== 禁用缓存中间件 ====================
+// 为所有 API 响应添加禁用缓存的头，避免 304 问题
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 
 // ==================== 解析中间件 ====================
 

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../theme/themeContext';
 import { creationStorageService, CreationItem } from '../services/CreationStorageService';
+import { Button } from '../components/Button';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,14 +31,33 @@ export const Assets: React.FC<any> = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState<AssetTab>('images');
   const [creations, setCreations] = useState<CreationItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const floatingAnimation = useRef(new Animated.Value(0)).current;
+
+  // 检查登录状态
+  const checkLoginStatus = useCallback(async () => {
+    const loggedIn = await creationStorageService.checkLoginStatus();
+    setIsLoggedIn(loggedIn);
+    return loggedIn;
+  }, []);
 
   // 加载创作内容
   const loadCreations = useCallback(async () => {
     setLoading(true);
     try {
       console.log('【Assets】开始加载创作...');
+      
+      // 先检查登录状态
+      const loggedIn = await checkLoginStatus();
+      
+      if (!loggedIn) {
+        console.log('【Assets】未登录，不加载创作数据');
+        setCreations([]);
+        setLoading(false);
+        return;
+      }
+      
       const allCreations = await creationStorageService.getAllCreations();
       console.log('【Assets】加载到创作数量:', allCreations.length);
       console.log('【Assets】创作数据:', allCreations);
@@ -47,7 +67,7 @@ export const Assets: React.FC<any> = ({ navigation, route }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [checkLoginStatus]);
 
   useEffect(() => {
     loadCreations();
@@ -158,6 +178,11 @@ export const Assets: React.FC<any> = ({ navigation, route }) => {
     Alert.alert('下载', '已开始下载到本地相册');
   };
 
+  // 跳转到登录页面
+  const handleLogin = () => {
+    navigation.navigate('Login');
+  };
+
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'image': return '🖼️';
@@ -185,6 +210,47 @@ export const Assets: React.FC<any> = ({ navigation, route }) => {
   };
 
   const filteredCreations = getFilteredCreations();
+
+  // 渲染未登录状态
+  const renderNotLoggedIn = () => {
+    return (
+      <View style={styles.notLoggedInContainer}>
+        <Animated.View
+          style={[
+            styles.notLoggedInIconContainer,
+            {
+              transform: [{
+                translateY: floatingAnimation.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -10],
+                }),
+              }],
+            },
+          ]}
+        >
+          <Text style={styles.notLoggedInIcon}>🔒</Text>
+        </Animated.View>
+        <Text style={styles.notLoggedInTitle}>请先登录</Text>
+        <Text style={styles.notLoggedInSubtitle}>
+          登录后可以查看和管理您的创作资产
+        </Text>
+        <View style={styles.notLoggedInButtons}>
+          <Button
+            title="立即登录"
+            onPress={handleLogin}
+            style={styles.loginButton}
+          />
+          <TouchableOpacity
+            style={styles.exploreButton}
+            onPress={() => navigation.navigate('Discover')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.exploreButtonText}>先去看看别人的创作 →</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
 
   // 渲染图片网格
   const renderImageGrid = () => {
@@ -447,34 +513,36 @@ export const Assets: React.FC<any> = ({ navigation, route }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {creations.filter(c => c.type === 'image').length}
-          </Text>
-          <Text style={styles.statLabel}>图片</Text>
+      {/* Stats - 仅登录时显示 */}
+      {isLoggedIn && (
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {creations.filter(c => c.type === 'image').length}
+            </Text>
+            <Text style={styles.statLabel}>图片</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {creations.filter(c => c.type === 'video' || c.type === 'video_long').length}
+            </Text>
+            <Text style={styles.statLabel}>视频</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>
+              {creations.filter(c => c.type === 'script').length}
+            </Text>
+            <Text style={styles.statLabel}>剧本</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{creations.length}</Text>
+            <Text style={styles.statLabel}>总计</Text>
+          </View>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {creations.filter(c => c.type === 'video' || c.type === 'video_long').length}
-          </Text>
-          <Text style={styles.statLabel}>视频</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {creations.filter(c => c.type === 'script').length}
-          </Text>
-          <Text style={styles.statLabel}>剧本</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{creations.length}</Text>
-          <Text style={styles.statLabel}>总计</Text>
-        </View>
-      </View>
+      )}
 
       {/* Content */}
       <ScrollView
@@ -482,9 +550,15 @@ export const Assets: React.FC<any> = ({ navigation, route }) => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'images' && renderImageGrid()}
-        {activeTab === 'audio' && renderAudioList()}
-        {activeTab === 'videos' && renderVideoGrid()}
+        {!isLoggedIn ? (
+          renderNotLoggedIn()
+        ) : (
+          <>
+            {activeTab === 'images' && renderImageGrid()}
+            {activeTab === 'audio' && renderAudioList()}
+            {activeTab === 'videos' && renderVideoGrid()}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -576,6 +650,56 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 40,
+  },
+  // Not logged in state
+  notLoggedInContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    minHeight: 400,
+  },
+  notLoggedInIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  notLoggedInIcon: {
+    fontSize: 56,
+  },
+  notLoggedInTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  notLoggedInSubtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 40,
+  },
+  notLoggedInButtons: {
+    width: '100%',
+    paddingHorizontal: 40,
+    gap: 16,
+  },
+  loginButton: {
+    width: '100%',
+  },
+  exploreButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  exploreButtonText: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '500',
   },
   // Empty state
   emptyContainer: {

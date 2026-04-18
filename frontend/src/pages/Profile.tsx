@@ -174,9 +174,12 @@ export const Profile: React.FC<ProfileProps> = ({ navigation }) => {
 
     setLoading(true);
     try {
+      console.log('【Profile】开始加载统计数据...');
       // 从本地存储获取数据（无论登录与否，都计算真实数据）
       const dreams = await dreamStorageManager.getDreams();
+      console.log('【Profile】梦境数据:', dreams);
       const creations = await creationStorageService.getAllCreations();
+      console.log('【Profile】创作数据:', creations);
 
       console.log('【Profile】获取到梦境数量:', dreams.length);
       console.log('【Profile】获取到创作数量:', creations.length);

@@ -62,7 +62,7 @@ export interface MediaAsset {
   createdAt: string;
 }
 
-// 梦境解读
+// 梦境解读（数据库返回的原始结构）
 export interface Interpretation {
   id: string;
   dreamId: string;
@@ -74,8 +74,10 @@ export interface Interpretation {
     detected: string[];
     suggestions: string;
   };
-  suggestions: string[];
-  references: KnowledgeReference[];
+  suggestions: string | null;
+  metadata?: {
+    references?: KnowledgeReference[];
+  };
   modelSource: string;
   createdAt: string;
 }

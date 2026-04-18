@@ -80,6 +80,14 @@ export interface TaskProgress {
 // 进度回调函数类型
 export type ProgressCallback = (progress: TaskProgress) => void;
 
+// 轮询配置选项
+export interface PollingOptions {
+  taskId: string;
+  onProgress: (progress: TaskProgress) => void;
+  onComplete?: (result: TaskProgress['result']) => void;
+  onError?: (error: Error) => void;
+}
+
 // 轮询间隔（毫秒）
 const POLL_INTERVAL = 1000;
 
@@ -96,17 +104,26 @@ const pollingTasks = new Map<string, {
  */
 export async function startImageGeneration(params: {
   prompt?: string;
+  dreamContent?: string;  // 梦境内容，会被映射为 prompt
   style?: string;
   dreamId: string;
   dreamTitle: string;
 }): Promise<string> {
+  // 将 dreamContent 映射为 prompt，优先使用 prompt
+  const requestBody = {
+    prompt: params.prompt || params.dreamContent,
+    style: params.style,
+    dreamId: params.dreamId,
+    dreamTitle: params.dreamTitle,
+  };
+
   const response = await apiRequest<{
     code: number;
     data: { taskId: string; message: string };
     message?: string;
   }>(API_ENDPOINTS.GENERATIONS.IMAGE, {
     method: 'POST',
-    body: JSON.stringify(params),
+    body: JSON.stringify(requestBody),
   });
 
   // 后端返回 code 200/201 表示成功
@@ -124,16 +141,24 @@ export async function startImageGeneration(params: {
  */
 export async function startVideoGeneration(params: {
   prompt?: string;
+  dreamContent?: string;  // 梦境内容，会被映射为 prompt
   dreamId: string;
   dreamTitle: string;
 }): Promise<string> {
+  // 将 dreamContent 映射为 prompt，优先使用 prompt
+  const requestBody = {
+    prompt: params.prompt || params.dreamContent,
+    dreamId: params.dreamId,
+    dreamTitle: params.dreamTitle,
+  };
+
   const response = await apiRequest<{
     code: number;
     data: { taskId: string; message: string };
     message?: string;
   }>(API_ENDPOINTS.GENERATIONS.VIDEO, {
     method: 'POST',
-    body: JSON.stringify(params),
+    body: JSON.stringify(requestBody),
   });
 
   // 后端返回 code 200/201 表示成功
@@ -201,6 +226,12 @@ export async function getTaskProgress(taskId: string): Promise<TaskProgress | nu
 
 /**
  * 开始轮询任务进度
+ * @param options 轮询配置选项对象，包含 taskId、onProgress、onComplete、onError
+ * @returns 停止轮询的函数
+ */
+export function startPollingProgress(options: PollingOptions): () => void;
+/**
+ * 开始轮询任务进度（兼容旧版调用方式）
  * @param taskId 任务ID
  * @param onProgress 进度回调
  * @returns 停止轮询的函数
@@ -208,17 +239,42 @@ export async function getTaskProgress(taskId: string): Promise<TaskProgress | nu
 export function startPollingProgress(
   taskId: string,
   onProgress: ProgressCallback
+): () => void;
+/**
+ * 开始轮询任务进度的实现
+ */
+export function startPollingProgress(
+  optionsOrTaskId: PollingOptions | string,
+  onProgress?: ProgressCallback
 ): () => void {
+  // 解析参数
+  let taskId: string;
+  let progressCallback: (progress: TaskProgress) => void;
+  let onComplete: ((result: TaskProgress['result']) => void) | undefined;
+  let onError: ((error: Error) => void) | undefined;
+
+  if (typeof optionsOrTaskId === 'string') {
+    // 旧版调用方式: startPollingProgress(taskId, onProgress)
+    taskId = optionsOrTaskId;
+    progressCallback = onProgress!;
+  } else {
+    // 新版调用方式: startPollingProgress({ taskId, onProgress, onComplete, onError })
+    taskId = optionsOrTaskId.taskId;
+    progressCallback = optionsOrTaskId.onProgress;
+    onComplete = optionsOrTaskId.onComplete;
+    onError = optionsOrTaskId.onError;
+  }
+
   // 如果任务已经在轮询，添加回调到集合
   if (pollingTasks.has(taskId)) {
     const task = pollingTasks.get(taskId)!;
-    task.callbacks.add(onProgress);
-    
+    task.callbacks.add(progressCallback);
+
     // 返回停止函数
     return () => {
       const task = pollingTasks.get(taskId);
       if (task) {
-        task.callbacks.delete(onProgress);
+        task.callbacks.delete(progressCallback);
         // 如果没有回调了，停止轮询
         if (task.callbacks.size === 0) {
           clearInterval(task.intervalId);
@@ -229,35 +285,61 @@ export function startPollingProgress(
   }
 
   // 创建新的轮询任务
-  const callbacks = new Set<ProgressCallback>([onProgress]);
-  
+  const callbacks = new Set<ProgressCallback>([progressCallback]);
+
   const intervalId = setInterval(async () => {
-    const progress = await getTaskProgress(taskId);
-    
-    if (!progress) {
-      console.warn('获取进度失败，继续轮询...');
-      return;
-    }
+    try {
+      const progress = await getTaskProgress(taskId);
 
-    // 通知所有回调
-    const task = pollingTasks.get(taskId);
-    if (task) {
-      task.callbacks.forEach(callback => {
-        try {
-          callback(progress);
-        } catch (error) {
-          console.error('进度回调执行失败:', error);
-        }
-      });
-    }
+      if (!progress) {
+        console.warn('获取进度失败，继续轮询...');
+        return;
+      }
 
-    // 如果任务完成或失败，停止轮询
-    if (progress.status === 'completed' || progress.status === 'failed') {
+      // 通知所有回调
       const task = pollingTasks.get(taskId);
       if (task) {
-        clearInterval(task.intervalId);
-        pollingTasks.delete(taskId);
-        console.log(`[GenerationTask] 任务 ${taskId} 结束，停止轮询`);
+        task.callbacks.forEach(callback => {
+          try {
+            callback(progress);
+          } catch (error) {
+            console.error('进度回调执行失败:', error);
+          }
+        });
+      }
+
+      // 如果任务完成或失败，停止轮询并调用相应的回调
+      if (progress.status === 'completed' || progress.status === 'failed') {
+        const task = pollingTasks.get(taskId);
+        if (task) {
+          clearInterval(task.intervalId);
+          pollingTasks.delete(taskId);
+          console.log(`[GenerationTask] 任务 ${taskId} 结束，停止轮询`);
+
+          // 调用完成或错误回调
+          if (progress.status === 'completed' && onComplete) {
+            try {
+              onComplete(progress.result);
+            } catch (error) {
+              console.error('onComplete 回调执行失败:', error);
+            }
+          } else if (progress.status === 'failed' && onError) {
+            try {
+              onError(new Error(progress.error || '任务执行失败'));
+            } catch (error) {
+              console.error('onError 回调执行失败:', error);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('轮询过程中发生错误:', error);
+      if (onError) {
+        try {
+          onError(error instanceof Error ? error : new Error(String(error)));
+        } catch (e) {
+          console.error('onError 回调执行失败:', e);
+        }
       }
     }
   }, POLL_INTERVAL);
@@ -267,7 +349,12 @@ export function startPollingProgress(
   // 立即获取一次进度
   getTaskProgress(taskId).then(progress => {
     if (progress) {
-      onProgress(progress);
+      progressCallback(progress);
+    }
+  }).catch(error => {
+    console.error('获取初始进度失败:', error);
+    if (onError) {
+      onError(error instanceof Error ? error : new Error(String(error)));
     }
   });
 
@@ -275,7 +362,7 @@ export function startPollingProgress(
   return () => {
     const task = pollingTasks.get(taskId);
     if (task) {
-      task.callbacks.delete(onProgress);
+      task.callbacks.delete(progressCallback);
       if (task.callbacks.size === 0) {
         clearInterval(task.intervalId);
         pollingTasks.delete(taskId);

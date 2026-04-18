@@ -46,20 +46,7 @@ export class InterpretationRepository {
         i.symbols,
         i.emotions_analysis as "emotionsAnalysis",
         i.suggestions,
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id', ki.id,
-                'title', ki.title,
-                'source', ki.source
-              )
-            )
-            FROM knowledge_items ki
-            WHERE ki.id = ANY(i.reference_ids)
-          ),
-          '[]'::jsonb
-        ) as references,
+        i.metadata,
         i.model_source as "modelSource",
         i.created_at as "createdAt"
       FROM interpretations i
@@ -148,29 +135,45 @@ export class InterpretationRepository {
       symbols?: any[];
       emotionsAnalysis?: any;
       suggestions?: string[];
-      referenceIds?: string[];
+      references?: any[];
       modelSource?: string;
     }
   ): Promise<InterpretationEntity> {
+    console.log('[InterpretationRepository.create] 开始插入:', { userId, dreamId: data.dreamId, type: data.type, modelSource: data.modelSource });
+    
+    // 将 suggestions 数组拼接为文本
+    const suggestionsText = data.suggestions && data.suggestions.length > 0 
+      ? data.suggestions.join('\n') 
+      : null;
+    
+    // 将引用信息存储到 metadata 字段
+    const metadata = data.references && data.references.length > 0
+      ? JSON.stringify({ references: data.references })
+      : null;
+    
     const query = `
       INSERT INTO interpretations (
         user_id, dream_id, type, content, 
         symbols, emotions_analysis, suggestions, 
-        reference_ids, model_source
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        metadata, model_source
+      ) VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9)
       RETURNING *
     `;
-    const { rows } = await this.db.query(query, [
+    
+    const params = [
       userId,
       data.dreamId,
       data.type,
       data.content,
-      data.symbols || [],
-      data.emotionsAnalysis || null,
-      data.suggestions || [],
-      data.referenceIds || [],
+      data.symbols ? JSON.stringify(data.symbols) : '[]',
+      data.emotionsAnalysis ? JSON.stringify(data.emotionsAnalysis) : null,
+      suggestionsText,
+      metadata,
       data.modelSource || null,
-    ]);
+    ];
+    console.log('[InterpretationRepository.create] SQL参数:', params.map((p, i) => i >= 4 && i <= 7 ? `[JSON${i}]` : p));
+    const { rows } = await this.db.query(query, params);
+    console.log('[InterpretationRepository.create] 插入成功, 返回行数:', rows?.length);
     return rows[0];
   }
 

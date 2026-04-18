@@ -10,7 +10,7 @@ export enum ContentType {
   MIXED = 'mixed',
 }
 
-@Entity('dreams')
+@Entity('dream_entries')
 export class Dream {
   @PrimaryGeneratedColumn('uuid')
   id: string;

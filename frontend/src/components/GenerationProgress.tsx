@@ -1,26 +1,29 @@
 /**
  * 生成进度组件
- * 显示图片/视频/长视频生成的进度条和状态
+ * 显示图片/视频/长视频/梦境解读生成的进度条和状态
  */
 import React from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
-import { TaskProgress } from '../services/generationTask.service';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 interface GenerationProgressProps {
-  progress: TaskProgress | null;
-  visible: boolean;
+  progress?: number;
+  status?: 'processing' | 'completed' | 'failed';
+  type?: 'image' | 'video' | 'video_long' | 'interpretation';
+  onCancel?: () => void;
+  visible?: boolean;
 }
 
 export const GenerationProgress: React.FC<GenerationProgressProps> = ({
-  progress,
-  visible,
+  progress = 0,
+  status = 'processing',
+  type = 'image',
+  onCancel,
+  visible = true,
 }) => {
-  if (!visible || !progress) {
+  // 如果不显示，返回 null
+  if (!visible) {
     return null;
   }
-
-  const { status, progress: percent, message, error } = progress;
-
   // 根据状态确定颜色
   const getStatusColor = () => {
     switch (status) {
@@ -37,15 +40,31 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
 
   // 根据类型确定标题
   const getTypeLabel = () => {
-    switch (progress.type) {
+    switch (type) {
       case 'image':
         return '图片生成';
       case 'video':
         return '视频生成';
-      case 'longvideo':
+      case 'video_long':
         return '长视频生成';
+      case 'interpretation':
+        return '梦境解读生成';
       default:
         return '生成中';
+    }
+  };
+
+  // 根据状态确定消息
+  const getStatusMessage = () => {
+    switch (status) {
+      case 'completed':
+        return '生成完成';
+      case 'failed':
+        return '生成失败';
+      case 'processing':
+        return '正在生成中...';
+      default:
+        return '准备中...';
     }
   };
 
@@ -60,7 +79,7 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
             style={[
               styles.progressBar,
               {
-                width: `${percent}%`,
+                width: `${progress}%`,
                 backgroundColor: getStatusColor(),
               },
             ]}
@@ -69,14 +88,14 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
 
         {/* 进度信息 */}
         <View style={styles.infoRow}>
-          <Text style={styles.percentText}>{percent}%</Text>
-          <Text style={styles.messageText}>{error || message}</Text>
+          <Text style={styles.percentText}>{progress}%</Text>
+          <Text style={styles.messageText}>{getStatusMessage()}</Text>
         </View>
 
         {/* 状态指示器 */}
         {status === 'processing' && (
           <View style={styles.loadingIndicator}>
-            <Text style={styles.loadingText}>生成中...</Text>
+            <Text style={styles.loadingText}>✨ 正在分析梦境...</Text>
           </View>
         )}
 
@@ -90,6 +109,13 @@ export const GenerationProgress: React.FC<GenerationProgressProps> = ({
           <View style={styles.errorIndicator}>
             <Text style={styles.errorText}>✗ 生成失败</Text>
           </View>
+        )}
+
+        {/* 取消按钮 */}
+        {status === 'processing' && (
+          <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+            <Text style={styles.cancelButtonText}>取消</Text>
+          </TouchableOpacity>
         )}
       </View>
     </View>
@@ -137,7 +163,6 @@ const styles = StyleSheet.create({
   progressBar: {
     height: '100%',
     borderRadius: 4,
-    transition: 'width 0.3s ease',
   },
   infoRow: {
     flexDirection: 'row',
@@ -182,5 +207,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#F44336',
     fontWeight: 'bold',
+  },
+  cancelButton: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
 });

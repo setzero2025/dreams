@@ -5,8 +5,8 @@
 // 在 Web 环境下 __DEV__ 可能未定义，使用默认值
 const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : true;
 export const API_BASE_URL = isDev
-  ? 'http://192.168.1.10:3002/api/v1'  // 开发环境
-  : 'https://your-production-api.com/api/v1';  // 生产环境
+  ? 'http://192.168.1.7:3002/api/v1'  // 开发环境 - 后端端口3002
+  : 'http://101.201.246.158:3002/api/v1';  // 生产环境
 
 // API 端点配置
 export const API_ENDPOINTS = {
@@ -71,6 +71,14 @@ export const API_ENDPOINTS = {
     CURRENT: '/subscriptions/current',
     CREATE: '/subscriptions',
     CANCEL: '/subscriptions',
+  },
+
+  // 音频相关
+  AUDIO: {
+    UPLOAD: '/audio/upload',
+    TRANSCRIBE: '/audio/transcribe',
+    DREAM_UPLOAD: (dreamId: string) => `/audio/dream/${dreamId}/upload`,
+    DREAM_AUDIO: (dreamId: string) => `/audio/dream/${dreamId}`,
   },
 };
 

@@ -33,78 +33,8 @@ const getTypeConfig = (isDark: boolean) => ({
   script: { icon: '📝', label: '剧本', color: '#8b5cf6', bgColor: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.1)' },
   video: { icon: '🎬', label: '短视频', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.15)' },
   video_long: { icon: '🎥', label: '长视频', color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.15)' },
+  interpretation: { icon: '🔮', label: '解读', color: '#f59e0b', bgColor: 'rgba(245, 158, 11, 0.15)' },
 });
-
-// 视频播放器组件
-const VideoPlayerModal: React.FC<{
-  visible: boolean;
-  videoUrl: string;
-  onClose: () => void;
-}> = ({ visible, videoUrl, onClose }) => {
-  return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalContainer}>
-        <TouchableOpacity style={styles.modalOverlay} onPress={onClose}>
-          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-            {Platform.OS === 'web' ? (
-              <video
-                src={videoUrl}
-                controls
-                autoPlay
-                style={styles.videoPlayer}
-                playsInline
-              />
-            ) : (
-              <View style={styles.videoPlaceholder}>
-                <Text style={styles.videoPlaceholderText}>视频播放</Text>
-                <Text style={styles.videoUrlText} numberOfLines={2}>{videoUrl}</Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-      </View>
-    </Modal>
-  );
-};
-
-// 图片预览组件
-const ImagePreviewModal: React.FC<{
-  visible: boolean;
-  imageUrl: string;
-  onClose: () => void;
-}> = ({ visible, imageUrl, onClose }) => {
-  return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalContainer}>
-        <TouchableOpacity style={styles.modalOverlay} onPress={onClose}>
-          <View style={styles.imageModalContent} onStartShouldSetResponder={() => true}>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-            <Image
-              source={{ uri: imageUrl }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
-          </View>
-        </TouchableOpacity>
-      </View>
-    </Modal>
-  );
-};
 
 export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, route }) => {
   const { colors, isDark } = useTheme();
@@ -122,6 +52,10 @@ export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, rout
   // 图片预览弹窗状态
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState('');
+
+  // 梦境解读弹窗状态
+  const [interpretationModalVisible, setInterpretationModalVisible] = useState(false);
+  const [currentInterpretation, setCurrentInterpretation] = useState<CreationItem | null>(null);
 
   const dreamId = route?.params?.dreamId;
 
@@ -188,7 +122,7 @@ export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, rout
     }
   };
 
-  // 处理媒体点击（图片或视频）
+  // 处理媒体点击（图片、视频或解读）
   const handleMediaPress = (item: CreationItem) => {
     if (item.type === 'image') {
       // 点击图片直接预览
@@ -198,10 +132,14 @@ export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, rout
       // 点击视频直接播放
       setCurrentVideoUrl(item.videoUrl || '');
       setVideoModalVisible(true);
+    } else if (item.type === 'interpretation') {
+      // 点击梦境解读封面打开详情弹窗
+      setCurrentInterpretation(item);
+      setInterpretationModalVisible(true);
     }
   };
 
-  // 处理标题点击（跳转到详情页）
+  // 处理标题点击（跳转到详情页或弹窗）
   const handleTitlePress = (item: CreationItem) => {
     switch (item.type) {
       case 'image':
@@ -215,7 +153,180 @@ export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, rout
         // 剧本类型可以跳转到剧本详情页
         navigation.navigate('ScriptDetail', { script: item.script, title: item.title });
         break;
+      case 'interpretation':
+        // 梦境解读用弹窗展示
+        setCurrentInterpretation(item);
+        setInterpretationModalVisible(true);
+        break;
     }
+  };
+
+  // 视频播放器组件 - 移到组件内部
+  const VideoPlayerModal: React.FC<{
+    visible: boolean;
+    videoUrl: string;
+    onClose: () => void;
+  }> = ({ visible, videoUrl, onClose }) => {
+    return (
+      <Modal
+        visible={visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity style={styles.modalOverlay} onPress={onClose}>
+            <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <video
+                  src={videoUrl}
+                  controls
+                  autoPlay
+                  style={styles.videoPlayer}
+                  playsInline
+                />
+              ) : (
+                <View style={styles.videoPlaceholder}>
+                  <Text style={styles.videoPlaceholderText}>视频播放</Text>
+                  <Text style={styles.videoUrlText} numberOfLines={2}>{videoUrl}</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    );
+  };
+
+  // 图片预览组件 - 移到组件内部
+  const ImagePreviewModal: React.FC<{
+    visible: boolean;
+    imageUrl: string;
+    onClose: () => void;
+  }> = ({ visible, imageUrl, onClose }) => {
+    return (
+      <Modal
+        visible={visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity style={styles.modalOverlay} onPress={onClose}>
+            <View style={styles.imageModalContent} onStartShouldSetResponder={() => true}>
+              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    );
+  };
+
+  // 梦境解读详情弹窗组件
+  const InterpretationModal: React.FC<{
+    visible: boolean;
+    item: CreationItem | null;
+    onClose: () => void;
+  }> = ({ visible, item, onClose }) => {
+    if (!item) return null;
+
+    return (
+      <Modal
+        visible={visible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity style={styles.modalOverlay} onPress={onClose} activeOpacity={1}>
+            <View style={styles.interpretationModalContent} onStartShouldSetResponder={() => true}>
+              {/* 头部 */}
+              <View style={styles.interpretationModalHeader}>
+                <Text style={styles.interpretationModalTitle}>🔮 梦境解读</Text>
+                <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.interpretationModalScroll} showsVerticalScrollIndicator={false}>
+                {/* 关联梦境信息 */}
+                <View style={styles.interpretationDreamInfo}>
+                  <Text style={styles.interpretationDreamTitle}>关联梦境: {item.dreamTitle}</Text>
+                  <Text style={styles.interpretationDate}>{formatDateTime(item.createdAt)}</Text>
+                </View>
+
+                {/* 整体解读 */}
+                {item.interpretation && (
+                  <View style={styles.interpretationSection}>
+                    <Text style={styles.interpretationSectionTitle}>📖 整体解读</Text>
+                    <Text style={styles.interpretationText}>{item.interpretation}</Text>
+                  </View>
+                )}
+
+                {/* 符号解读 */}
+                {item.symbols && item.symbols.length > 0 && (
+                  <View style={styles.interpretationSection}>
+                    <Text style={styles.interpretationSectionTitle}>🔍 符号解读</Text>
+                    {item.symbols.map((symbol, index) => (
+                      <View key={index} style={styles.symbolItem}>
+                        <Text style={styles.symbolName}>{symbol.symbol}</Text>
+                        <Text style={styles.symbolContext}>{symbol.context}</Text>
+                        <Text style={styles.symbolMeaning}>{symbol.meaning}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* 情绪分析 */}
+                {item.emotions && (
+                  <View style={styles.interpretationSection}>
+                    <Text style={styles.interpretationSectionTitle}>💭 情绪分析</Text>
+                    <View style={styles.emotionContainer}>
+                      {Array.isArray(item.emotions) ? (
+                        item.emotions.map((emotion, index) => (
+                          <View key={index} style={styles.emotionBadge}>
+                            <Text style={styles.emotionPrimary}>{emotion.primary}</Text>
+                            <Text style={styles.emotionDescription}>{emotion.description}</Text>
+                          </View>
+                        ))
+                      ) : (
+                        <View style={styles.emotionBadge}>
+                          <Text style={styles.emotionPrimary}>{item.emotions.primary}</Text>
+                          <Text style={styles.emotionDescription}>{item.emotions.description}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* 实用建议 */}
+                {item.suggestions && item.suggestions.length > 0 && (
+                  <View style={styles.interpretationSection}>
+                    <Text style={styles.interpretationSectionTitle}>💡 实用建议</Text>
+                    {item.suggestions.map((suggestion, index) => (
+                      <View key={index} style={styles.suggestionItem}>
+                        <Text style={styles.suggestionNumber}>{index + 1}</Text>
+                        <Text style={styles.suggestionText}>{suggestion}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    );
   };
 
   const renderFilterTabs = () => {
@@ -248,18 +359,36 @@ export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, rout
     const typeConfig = getTypeConfig(isDark)[item.type as keyof ReturnType<typeof getTypeConfig>] ||
       { icon: '🎨', label: '创作', color: colors.primary, bgColor: colors.card };
     const isVideo = item.type === 'video' || item.type === 'video_long';
+    const isInterpretation = item.type === 'interpretation';
 
     return (
       <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
-        {/* 媒体区域 - 点击预览/播放 */}
+        {/* 媒体区域 - 点击预览/播放/查看详情 */}
         <TouchableOpacity
           style={styles.mediaTouchable}
           onPress={() => handleMediaPress(item)}
           activeOpacity={0.9}
         >
-          <View style={[styles.thumbnailContainer, { backgroundColor: typeConfig.bgColor }]}>
+          <View style={[styles.thumbnailContainer, { backgroundColor: typeConfig.bgColor, height: isInterpretation ? 120 : 180 }]}>
             {item.thumbnail || item.imageUrl ? (
               <Image source={{ uri: item.thumbnail || item.imageUrl }} style={styles.thumbnail} resizeMode="cover" />
+            ) : isInterpretation ? (
+              // 梦境解读专用温馨封面 - 与梦境详情页面保持一致样式
+              <View style={styles.interpretationCover}>
+                {/* 装饰性星星 */}
+                <View style={styles.interpretationStars} pointerEvents="none">
+                  <Text style={[styles.starIcon, { top: 10, left: 20, fontSize: 12 }]}>✨</Text>
+                  <Text style={[styles.starIcon, { top: 30, right: 25, fontSize: 16 }]}>⭐</Text>
+                  <Text style={[styles.starIcon, { bottom: 25, left: 30, fontSize: 14 }]}>✨</Text>
+                  <Text style={[styles.starIcon, { bottom: 15, right: 20, fontSize: 10 }]}>⭐</Text>
+                </View>
+                {/* 水晶球图标 */}
+                <View style={styles.crystalBallContainer} pointerEvents="none">
+                  <Text style={styles.crystalBallIcon}>🔮</Text>
+                </View>
+                {/* 底部装饰线 */}
+                <View style={styles.interpretationDecorativeLine} pointerEvents="none" />
+              </View>
             ) : (
               <Text style={[styles.typeIcon, { color: typeConfig.color }]}>{typeConfig.icon}</Text>
             )}
@@ -327,6 +456,13 @@ export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, rout
         onClose={() => setImageModalVisible(false)}
       />
 
+      {/* 梦境解读详情弹窗 */}
+      <InterpretationModal
+        visible={interpretationModalVisible}
+        item={currentInterpretation}
+        onClose={() => setInterpretationModalVisible(false)}
+      />
+
       <View style={styles.header}>
         <BackButton onPress={() => navigation.goBack()} style={styles.backButton} />
         <Text style={styles.headerTitle}>创作中心</Text>
@@ -347,7 +483,11 @@ export const CreationCenter: React.FC<CreationCenterProps> = ({ navigation, rout
             <Text style={styles.emptySubtext}>快去生成你的第一个作品吧</Text>
           </View>
         ) : (
-          filteredCreations.map(item => renderCreationCard(item))
+          filteredCreations.map(item => (
+            <React.Fragment key={item.id}>
+              {renderCreationCard(item)}
+            </React.Fragment>
+          ))
         )}
       </ScrollView>
     </SafeAreaView>
@@ -613,5 +753,174 @@ const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   previewImage: {
     width: SCREEN_WIDTH,
     height: SCREEN_WIDTH * 0.75,
+  },
+  // 梦境解读封面样式 - 与梦境详情页面保持一致
+  interpretationCover: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: isDark ? '#2D1B4E' : '#F8F4FF',
+  },
+  interpretationStars: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  starIcon: {
+    position: 'absolute',
+    opacity: 0.6,
+  },
+  crystalBallContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 32,
+    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.3)' : 'rgba(139, 92, 246, 0.15)',
+  },
+  crystalBallIcon: {
+    fontSize: 28,
+  },
+  interpretationDecorativeLine: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: isDark ? 'rgba(167, 139, 250, 0.5)' : 'rgba(139, 92, 246, 0.3)',
+  },
+  // 梦境解读弹窗样式
+  interpretationModalContent: {
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  interpretationModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  interpretationModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  interpretationModalScroll: {
+    padding: 16,
+  },
+  interpretationDreamInfo: {
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  interpretationDreamTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  interpretationDate: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  interpretationSection: {
+    marginBottom: 20,
+  },
+  interpretationSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  interpretationText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.text,
+  },
+  symbolItem: {
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 8,
+  },
+  symbolName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  symbolContext: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 4,
+    fontStyle: 'italic',
+  },
+  symbolMeaning: {
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  emotionContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  emotionBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  emotionPrimary: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8b5cf6',
+    marginBottom: 4,
+  },
+  emotionDescription: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    marginBottom: 10,
+    alignItems: 'flex-start',
+  },
+  suggestionNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginRight: 10,
+  },
+  suggestionText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
   },
 });

@@ -11,12 +11,12 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
 
     // 查询创作并关联梦境信息
     const result = await query(
-      `SELECT g.*, 
-              d.title as dream_title, 
-              d.dream_date, 
-              d.mood_rating
+      `SELECT g.*,
+              d.title as dream_title,
+              d.dream_date,
+              d.emotions
        FROM generations g
-       LEFT JOIN dreams d ON g.dream_id = d.id
+       LEFT JOIN dream_entries d ON g.dream_id = d.id
        WHERE g.user_id = $1
        ORDER BY g.created_at DESC`,
       [userId]
@@ -28,7 +28,7 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
       dreamId: item.dream_id,
       dreamTitle: item.dream_title || '未知梦境',
       dreamDate: item.dream_date,
-      dreamMood: item.mood_rating,
+      dreamMood: item.emotions ? item.emotions[0] : null,
       type: item.generation_type,
       title: item.title || '未命名创作',
       thumbnail: item.thumbnail,
@@ -62,24 +62,40 @@ router.get('/dream/:dreamId', authenticate, async (req: Request, res: Response) 
     const { dreamId } = req.params;
     const userId = req.user?.userId;
 
+    // 查询 generations 表中的创作
     const result = await query(
-      `SELECT g.*, 
-              d.title as dream_title, 
-              d.dream_date, 
-              d.mood_rating
+      `SELECT g.*,
+              d.title as dream_title,
+              d.dream_date,
+              d.emotions
        FROM generations g
-       LEFT JOIN dreams d ON g.dream_id = d.id
+       LEFT JOIN dream_entries d ON g.dream_id = d.id
        WHERE g.dream_id = $1 AND g.user_id = $2
        ORDER BY g.created_at DESC`,
       [dreamId, userId]
     );
 
+    // 查询 interpretations 表中的解读
+    const interpretationResult = await query(
+      `SELECT i.*,
+              d.title as dream_title,
+              d.dream_date,
+              d.emotions
+       FROM interpretations i
+       LEFT JOIN dream_entries d ON i.dream_id = d.id
+       WHERE i.dream_id = $1 AND i.user_id = $2 AND i.type = 'interpretation'
+       ORDER BY i.created_at DESC
+       LIMIT 1`,
+      [dreamId, userId]
+    );
+
+    // 处理 generations 数据
     const creations = result.rows?.map((item: any) => ({
       id: item.id,
       dreamId: item.dream_id,
       dreamTitle: item.dream_title || '未知梦境',
       dreamDate: item.dream_date,
-      dreamMood: item.mood_rating,
+      dreamMood: item.emotions ? item.emotions[0] : null,
       type: item.generation_type,
       title: item.title || '未命名创作',
       thumbnail: item.thumbnail,
@@ -92,6 +108,57 @@ router.get('/dream/:dreamId', authenticate, async (req: Request, res: Response) 
       createdAt: item.created_at,
       updatedAt: item.updated_at,
     })) || [];
+
+    // 如果有解读数据，添加到创作列表
+    if (interpretationResult.rows.length > 0) {
+      const interp = interpretationResult.rows[0];
+      
+      // 解析 suggestions（如果是字符串则按换行分割）
+      let suggestionList: string[] = [];
+      if (interp.suggestions) {
+        if (typeof interp.suggestions === 'string') {
+          suggestionList = interp.suggestions.split('\n').filter((s: string) => s.trim());
+        } else if (Array.isArray(interp.suggestions)) {
+          suggestionList = interp.suggestions;
+        }
+      }
+      
+      // 从 metadata 中获取引用信息
+      let references: any[] = [];
+      if (interp.metadata && interp.metadata.references) {
+        references = interp.metadata.references;
+      }
+      
+      // 使用 any 类型避免 TypeScript 类型检查错误
+      const interpretationItem: any = {
+        id: interp.id,
+        dreamId: interp.dream_id,
+        dreamTitle: interp.dream_title || '未知梦境',
+        dreamDate: interp.dream_date,
+        dreamMood: interp.emotions ? interp.emotions[0] : null,
+        type: 'interpretation',
+        title: `${interp.dream_title || '梦境'} - 梦境解读`,
+        thumbnail: null, // 解读没有缩略图
+        interpretation: interp.content, // 解读内容
+        symbols: interp.symbols || [],
+        emotions: interp.emotions_analysis,
+        suggestions: suggestionList,
+        references: references,
+        modelSource: interp.model_source,
+        status: 'completed',
+        createdAt: interp.created_at,
+        updatedAt: interp.created_at,
+      };
+      
+      creations.push(interpretationItem);
+    }
+
+    // 按创建时间排序（最新的在前）
+    creations.sort((a: any, b: any) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    console.log('【creationRoutes】返回创作列表:', JSON.stringify(creations, null, 2));
 
     res.json({
       success: true,
@@ -119,17 +186,18 @@ router.get('/type/:type', authenticate, async (req: Request, res: Response) => {
       'video': 'video',
       'video_long': 'video_long',
       'script': 'script',
+      'interpretation': 'interpretation',  // 梦境解读类型
     };
 
     const dbType = typeMapping[type] || type;
 
     const result = await query(
-      `SELECT g.*, 
-              d.title as dream_title, 
-              d.dream_date, 
-              d.mood_rating
+      `SELECT g.*,
+              d.title as dream_title,
+              d.dream_date,
+              d.emotions
        FROM generations g
-       LEFT JOIN dreams d ON g.dream_id = d.id
+       LEFT JOIN dream_entries d ON g.dream_id = d.id
        WHERE g.generation_type = $1 AND g.user_id = $2
        ORDER BY g.created_at DESC`,
       [dbType, userId]
@@ -140,7 +208,7 @@ router.get('/type/:type', authenticate, async (req: Request, res: Response) => {
       dreamId: item.dream_id,
       dreamTitle: item.dream_title || '未知梦境',
       dreamDate: item.dream_date,
-      dreamMood: item.mood_rating,
+      dreamMood: item.emotions ? item.emotions[0] : null,
       type: item.generation_type,
       title: item.title || '未命名创作',
       thumbnail: item.thumbnail,
@@ -175,13 +243,13 @@ router.get('/:id', authenticate, async (req: Request, res: Response): Promise<vo
     const userId = req.user?.userId;
 
     const result = await query(
-      `SELECT g.*, 
-              d.title as dream_title, 
+      `SELECT g.*,
+              d.title as dream_title,
               d.content as dream_content,
-              d.dream_date, 
-              d.mood_rating
+              d.dream_date,
+              d.emotions
        FROM generations g
-       LEFT JOIN dreams d ON g.dream_id = d.id
+       LEFT JOIN dream_entries d ON g.dream_id = d.id
        WHERE g.id = $1 AND g.user_id = $2`,
       [id, userId]
     );
@@ -255,7 +323,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 
     // 检查梦境是否存在于数据库中
     const dreamCheck = await query(
-      'SELECT id FROM dreams WHERE id = $1 AND user_id = $2',
+      'SELECT id FROM dream_entries WHERE id = $1 AND user_id = $2',
       [creation.dreamId, userId]
     );
 
@@ -274,6 +342,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       'video': 'video',
       'video_long': 'video_long',
       'script': 'script',
+      'interpretation': 'interpretation',  // 梦境解读类型
     };
 
     // 确保 prompt 有值

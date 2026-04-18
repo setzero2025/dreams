@@ -33,6 +33,7 @@ export class DreamController {
   getDreams = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.userId;
+      console.log('【DreamController.getDreams】userId:', userId);
       if (!userId) {
         return res.status(401).json(errorResponse(401, '未授权'));
       }
@@ -54,16 +55,17 @@ export class DreamController {
       }
 
       const result = await this.dreamService.getDreamList(userId, params);
+      console.log('【DreamController.getDreams】查询结果:', result);
 
-      return res.json(
-        paginatedResponse(
-          result.list,
-          result.pagination.page,
-          result.pagination.pageSize,
-          result.pagination.total,
-          '获取梦境列表成功'
-        )
+      const response = paginatedResponse(
+        result.list,
+        result.pagination.page,
+        result.pagination.pageSize,
+        result.pagination.total,
+        '获取梦境列表成功'
       );
+      console.log('【DreamController.getDreams】返回响应:', JSON.stringify(response, null, 2));
+      return res.json(response);
     } catch (error) {
       next(error);
     }

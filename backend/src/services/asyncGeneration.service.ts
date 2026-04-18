@@ -15,6 +15,7 @@ import { seedreamService } from './seedream.service';
 import { submitT2VTask, waitForT2VTask } from './wan26t2vService';
 import { generateLongVideo } from './longVideoService';
 import { supabaseStorageService } from './supabaseStorage.service';
+import { query, TABLES } from '../config/database';
 
 // 生成参数接口
 interface GenerationParams {
@@ -131,6 +132,19 @@ async function generateImageTask(
     url: storageUrl,
     thumbnail: storageUrl,
   });
+
+  // 保存到数据库
+  await saveGenerationToDatabase({
+    dreamId,
+    userId,
+    type: 'image',
+    prompt: prompt || '',
+    style,
+    title: `梦境图片 - ${dreamId.slice(0, 8)}`,
+    imageUrl: storageUrl,
+    thumbnail: storageUrl,
+    status: 'completed',
+  });
 }
 
 /**
@@ -143,24 +157,25 @@ async function generateVideoTask(
   userId: string,
   dreamId: string
 ): Promise<void> {
-  updateTaskProgress(taskId, 10, '正在提交视频生成任务...');
-  
+  updateTaskProgress(taskId, 5, '正在准备视频生成...');
+
   const videoPrompt = prompt || `梦境视频：${dreamTitle}`;
-  
+
   // 提交任务
+  updateTaskProgress(taskId, 10, '正在提交视频生成任务...');
   const taskResult = await submitT2VTask(videoPrompt);
-  
-  updateTaskProgress(taskId, 30, '视频生成中，请稍候...');
-  
-  // 等待完成
+
+  updateTaskProgress(taskId, 20, '视频生成中，预计需要3-5分钟...');
+
+  // 等待完成 - 使用更长的超时时间
   const result = await waitForT2VTask(taskResult.taskId);
-  
+
   if (result.status !== 'SUCCEEDED' || !result.videoUrl) {
     throw new Error(result.errorMessage || '视频生成失败');
   }
-  
-  updateTaskProgress(taskId, 80, '正在上传视频...');
-  
+
+  updateTaskProgress(taskId, 80, '正在处理视频...');
+
   // 上传到 Storage
   let storageUrl = result.videoUrl;
   try {
@@ -169,16 +184,30 @@ async function generateVideoTask(
       'aiVideo',
       `video_${Date.now()}.mp4`
     );
+    updateTaskProgress(taskId, 95, '上传完成...');
   } catch (error) {
     console.error('[AsyncGeneration] 上传视频失败:', error);
   }
-  
+
   updateTaskProgress(taskId, 100, '视频生成完成');
-  
+
   completeTask(taskId, {
     url: storageUrl,
     thumbnail: result.coverUrl,
     coverUrl: result.coverUrl,
+  });
+
+  // 保存到数据库
+  await saveGenerationToDatabase({
+    dreamId,
+    userId,
+    type: 'video',
+    prompt: prompt || '',
+    title: `梦境视频 - ${dreamId.slice(0, 8)}`,
+    videoUrl: storageUrl,
+    coverUrl: result.coverUrl,
+    thumbnail: result.coverUrl,
+    status: 'completed',
   });
 }
 
@@ -211,11 +240,87 @@ async function generateLongVideoTask(
   }
   
   updateTaskProgress(taskId, 100, '长视频生成完成');
-  
+
   completeTask(taskId, {
     url: result.videoUrl,
     thumbnail: result.coverUrl,
     coverUrl: result.coverUrl,
     scenes: result.scenes,
   });
+
+  // 保存到数据库
+  await saveGenerationToDatabase({
+    dreamId,
+    userId,
+    type: 'longvideo',
+    prompt: script?.title || '',
+    title: `${dreamTitle || '梦境'} - 长视频`,
+    videoUrl: result.videoUrl,
+    coverUrl: result.coverUrl,
+    thumbnail: result.coverUrl,
+    status: 'completed',
+  });
+}
+
+/**
+ * 保存生成结果到数据库
+ * @param params 保存参数
+ */
+async function saveGenerationToDatabase(params: {
+  dreamId: string;
+  userId: string;
+  type: TaskType;
+  prompt?: string;
+  style?: string;
+  title: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  coverUrl?: string;
+  thumbnail?: string;
+  status?: string;
+}): Promise<void> {
+  try {
+    const {
+      dreamId,
+      userId,
+      type,
+      prompt,
+      style,
+      title,
+      imageUrl,
+      videoUrl,
+      coverUrl,
+      thumbnail,
+      status = 'completed',
+    } = params;
+
+    // 使用数据库生成的 UUID，不手动指定 id
+    // 插入数据库
+    const result = await query(
+      `INSERT INTO ${TABLES.GENERATIONS} (
+        dream_id, user_id, generation_type, prompt, title,
+        image_url, video_url, cover_url, thumbnail, style, status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      RETURNING id`,
+      [
+        dreamId,
+        userId,
+        type,
+        prompt || title,
+        title,
+        imageUrl || null,
+        videoUrl || null,
+        coverUrl || null,
+        thumbnail || null,
+        style || null,
+        status,
+      ]
+    );
+
+    const insertedId = result.rows[0]?.id;
+    console.log(`[AsyncGeneration] 作品已保存到数据库: ${insertedId}`);
+  } catch (error) {
+    console.error('[AsyncGeneration] 保存作品到数据库失败:', error);
+    // 不影响主流程，仅记录错误
+  }
 }

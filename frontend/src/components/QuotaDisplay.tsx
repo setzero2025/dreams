@@ -1,67 +1,103 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '../theme/themeContext';
-import { authApi } from '../services/api/authApi';
+import { authApi, User } from '../services/api/authApi';
 
-interface QuotaData {
-  image: { used: number; limit: number; unlimited?: boolean };
-  video: { used: number; limit: number; unlimited?: boolean };
-  longVideo: { used: number; limit: number; unlimited?: boolean };
-  interpretation?: { used: number; limit: number; unlimited?: boolean };
-}
+// 用户角色类型
+export type UserTier = 'guest' | 'registered' | 'subscribed';
+
+// 额度配置 - 按用户角色和生成类型定义
+export const QUOTA_CONFIG = {
+  // 访客（未登录）- 每个梦境限制
+  guest: {
+    image: { limit: 1, unlimited: false },      // 每个梦境1张图
+    video: { limit: 1, unlimited: false },      // 每个梦境1个视频预览
+    longVideo: { limit: 0, unlimited: false },  // 访客不能生成长视频
+    interpretation: { limit: 1, unlimited: false }, // 每个梦境1次解读
+  },
+  // 注册用户（未订阅）- 每个梦境限制
+  registered: {
+    image: { limit: 5, unlimited: false },      // 每个梦境最多5张图
+    video: { limit: 2, unlimited: false },      // 每个梦境2个梦视频
+    longVideo: { limit: 1, unlimited: false },  // 每个梦境1个长视频
+    interpretation: { limit: -1, unlimited: true }, // 无限解读
+  },
+  // 订阅用户 - 无限制
+  subscribed: {
+    image: { limit: -1, unlimited: true },      // 无限
+    video: { limit: -1, unlimited: true },      // 无限
+    longVideo: { limit: -1, unlimited: true },  // 无限
+    interpretation: { limit: -1, unlimited: true }, // 无限
+  },
+};
 
 interface QuotaDisplayProps {
   type: 'image' | 'video' | 'longVideo' | 'interpretation';
   showLabel?: boolean;
   compact?: boolean;
+  // 按梦境的额度检查参数
+  dreamId?: string;
+  currentCount?: number; // 当前梦境已生成的数量
 }
 
 export const QuotaDisplay: React.FC<QuotaDisplayProps> = ({ 
   type, 
   showLabel = true,
-  compact = false 
+  compact = false,
+  dreamId,
+  currentCount = 0,
 }) => {
   const { colors } = useTheme();
-  const [quota, setQuota] = useState<QuotaData | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadQuota();
+    loadUserInfo();
   }, []);
 
-  const loadQuota = async () => {
+  const loadUserInfo = async () => {
     try {
-      const response = await authApi.getUserQuota();
-      if (response.success && response.data) {
-        setQuota(response.data);
-      }
+      const userInfo = await authApi.getUserInfo();
+      setUser(userInfo);
     } catch (error) {
-      console.error('加载额度失败:', error);
+      console.error('加载用户信息失败:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const getQuotaInfo = () => {
-    if (!quota) return null;
-    
+  // 获取用户角色
+  const getUserTier = (): UserTier => {
+    if (!user) return 'guest';
+    return user.tier || 'guest';
+  };
+
+  // 获取额度配置
+  const getQuotaConfig = () => {
+    const tier = getUserTier();
+    return QUOTA_CONFIG[tier][type];
+  };
+
+  // 获取类型标签
+  const getTypeLabel = () => {
     switch (type) {
-      case 'image':
-        return { ...quota.image, label: '图片' };
-      case 'video':
-        return { ...quota.video, label: '视频' };
-      case 'longVideo':
-        return { ...quota.longVideo, label: '长视频' };
-      case 'interpretation':
-        return quota.interpretation 
-          ? { ...quota.interpretation, label: '解读' }
-          : { used: 0, limit: -1, unlimited: true, label: '解读' };
-      default:
-        return null;
+      case 'image': return '图片';
+      case 'video': return '视频';
+      case 'longVideo': return '长视频';
+      case 'interpretation': return '解读';
+      default: return '';
     }
   };
 
-  const quotaInfo = getQuotaInfo();
+  const config = getQuotaConfig();
+  const label = getTypeLabel();
+  const unlimited = config.unlimited;
+  const limit = config.limit;
+  const used = currentCount;
+  const remaining = unlimited ? '无限' : Math.max(0, limit - used);
+  const total = unlimited ? '∞' : limit;
+  const isLow = !unlimited && typeof remaining === 'number' && remaining <= 1;
+  const isExhausted = !unlimited && typeof remaining === 'number' && remaining <= 0;
 
   if (loading) {
     return (
@@ -71,19 +107,17 @@ export const QuotaDisplay: React.FC<QuotaDisplayProps> = ({
     );
   }
 
-  if (!quotaInfo) {
-    return null;
-  }
-
-  const { used, limit, unlimited, label } = quotaInfo;
-  const remaining = unlimited ? '无限' : Math.max(0, limit - used);
-  const total = unlimited ? '∞' : limit;
-  const isLow = !unlimited && typeof remaining === 'number' && remaining <= 1;
-
   if (compact) {
     return (
-      <View style={[styles.compactContainer, isLow && styles.lowQuota]}>
-        <Text style={[styles.compactText, { color: isLow ? colors.error : colors.textSecondary }]}>
+      <View style={[
+        styles.compactContainer, 
+        isLow && styles.lowQuota,
+        isExhausted && styles.exhaustedQuota
+      ]}>
+        <Text style={[
+          styles.compactText, 
+          { color: isExhausted ? colors.error : isLow ? colors.warning : colors.textSecondary }
+        ]}>
           {unlimited ? '无限' : `${remaining}/${total}`}
         </Text>
       </View>
@@ -98,7 +132,10 @@ export const QuotaDisplay: React.FC<QuotaDisplayProps> = ({
         </Text>
       )}
       <View style={styles.quotaRow}>
-        <Text style={[styles.remaining, { color: isLow ? colors.error : colors.secondary }]}>
+        <Text style={[
+          styles.remaining, 
+          { color: isExhausted ? colors.error : isLow ? colors.warning : colors.secondary }
+        ]}>
           {unlimited ? '无限' : remaining}
         </Text>
         {!unlimited && (
@@ -114,7 +151,7 @@ export const QuotaDisplay: React.FC<QuotaDisplayProps> = ({
               styles.progressFill, 
               { 
                 width: `${Math.min(100, (used / limit) * 100)}%`,
-                backgroundColor: isLow ? colors.error : colors.secondary 
+                backgroundColor: isExhausted ? colors.error : isLow ? colors.warning : colors.secondary 
               }
             ]} 
           />
@@ -139,7 +176,10 @@ const styles = StyleSheet.create({
     minWidth: 40,
   },
   lowQuota: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)', // 橙色警告背景
+  },
+  exhaustedQuota: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)', // 红色耗尽背景
   },
   label: {
     fontSize: 10,

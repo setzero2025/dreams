@@ -10,7 +10,9 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const PORT = config.server.port;
+// 强制使用 3002 端口
+const PORT = 3002;
+console.log('【服务器配置】强制使用端口:', PORT);
 
 async function startServer() {
   try {
@@ -21,7 +23,7 @@ async function startServer() {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`记梦App后端服务启动成功！`);
       console.log(`服务器地址: http://localhost:${PORT}`);
-      console.log(`局域网地址: http://192.168.1.11:${PORT}`);
+      console.log(`局域网地址: http://192.168.1.7:${PORT}`);
       console.log(`健康检查: http://localhost:${PORT}/health`);
       console.log(`API文档: http://localhost:${PORT}/api/v1`);
     });
